@@ -12,7 +12,6 @@ jobs:
 
     env:
       NPM_CONFIG_REGISTRY: https://registry.npmjs.org
-      NPM_CONFIG_CACHE: ${{ runner.temp }}/sorenza-npm-cache
       NPM_CONFIG_AUDIT: "false"
       NPM_CONFIG_FUND: "false"
 
@@ -31,6 +30,7 @@ jobs:
       - name: Install dependencies
         shell: pwsh
         run: |
+          $env:NPM_CONFIG_CACHE = Join-Path $env:RUNNER_TEMP "sorenza-npm-cache"
           npm cache verify
           npm ci --prefer-online --fetch-retries=3 --fetch-retry-mintimeout=1000 --fetch-retry-maxtimeout=30000
 

@@ -11,7 +11,7 @@ export function Sidebar({ active, onNavigate }: SidebarProps) {
     <aside className="sidebar" aria-label="Navegação principal">
       <div className="brand-row">
         <div className="brand-mark" aria-hidden="true">
-          <span>F</span>
+          <span>S</span>
         </div>
         <div className="brand-copy">
           <strong>Sorenza</strong>

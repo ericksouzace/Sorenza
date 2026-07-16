@@ -1,1 +1,93 @@
-.
+name: Build Sorenza for Windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    name: Build Windows installer
+    runs-on: windows-latest
+    timeout-minutes: 60
+
+    env:
+      NPM_CONFIG_REGISTRY: https://registry.npmjs.org
+      NPM_CONFIG_AUDIT: 'false'
+      NPM_CONFIG_FUND: 'false'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Normalize npm registry URLs
+        shell: pwsh
+        run: |
+          $lockPath = (Resolve-Path "package-lock.json").Path
+          $lockContent = [System.IO.File]::ReadAllText($lockPath)
+          $internalRegistry = "https://packages.applied-caas-gateway1.internal.api.openai.org/artifactory/api/npm/npm-public/"
+          $publicRegistry = "https://registry.npmjs.org/"
+          $replacementCount = ([regex]::Matches($lockContent, [regex]::Escape($internalRegistry))).Count
+
+          if ($replacementCount -gt 0) {
+            $lockContent = $lockContent.Replace($internalRegistry, $publicRegistry)
+            [System.IO.File]::WriteAllText(
+              $lockPath,
+              $lockContent,
+              [System.Text.UTF8Encoding]::new($false)
+            )
+          }
+
+          if ($lockContent.Contains("packages.applied-caas-gateway1.internal.api.openai.org")) {
+            throw "The package-lock.json still contains a private OpenAI registry URL."
+          }
+
+          Write-Host "Normalized $replacementCount private registry URL(s)."
+
+      - name: Show tool versions
+        shell: pwsh
+        run: |
+          node --version
+          npm --version
+          rustc --version
+          cargo --version
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          $env:NPM_CONFIG_CACHE = Join-Path $env:RUNNER_TEMP "sorenza-npm-cache"
+          npm ci --registry=https://registry.npmjs.org --no-audit --no-fund
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Build Sorenza Windows app
+        run: npm run tauri build
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: Sorenza-Windows
+          path: |
+            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
+          retention-days: 14
